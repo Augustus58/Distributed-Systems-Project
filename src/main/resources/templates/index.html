@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+    <head>
+        <title>Calculator</title>
+    </head>
+
+    <body>
+        <h1>Calculator</h1>
+        <ol>
+            <li th:each="operation : ${operations}">
+                <span th:text="${operation.arg1}"></span><span th:text="${operation.op}"></span><span th:text="${operation.arg2}"></span>=<span th:text="${operation.res}"></span>
+            </li>
+        </ol>
+        <p th:text="${feedback}"></p>
+        <form th:action="@{/calculate}" method="GET">
+            <input type="text" name="arg1"/>
+            <select name="op">
+                <option value="+">+</option>
+                <option value="-">-</option>
+                <option value="*">*</option>
+                <option value="/">/</option>
+            </select>
+            <input type="text" name="arg2"/>
+            <input type="submit"/>
+        </form>
+    </body>
+</html>

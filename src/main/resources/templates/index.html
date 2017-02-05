@@ -20,18 +20,21 @@
                 var model = new calculator.domain.Operations();
                 var view = new calculator.view.Calculator();
                 var controller = new calculator.controller.CalculatorController();
+                var parsingService = new calculator.service.ParsingService();
                 view.setController(controller);
                 model.setView(view);
                 controller.setModel(model);
+                controller.setParsingService(parsingService);                
                 view.setSubmitListener();
                 view.setResetListener();
+                parsingService.setController(controller);
             });
             var calculator = {};
             calculator.domain = {};
             calculator.domain.Operations = (function () {
                 function Operations() {
                     var view = {};
-                    this.getOperation = function (arg1, arg2, op, controller) {
+                    this.getOperation = function (arg1, arg2, op, caller) {
                         var arg1NoParentheses = arg1.replace('(', '').replace(')', '');
                         var arg2NoParentheses = arg2.replace('(', '').replace(')', '');
                         $.ajax({
@@ -39,7 +42,7 @@
                             data: {"arg1": arg1NoParentheses, "arg2": arg2NoParentheses, "op": op},
                             dataType: 'json',
                             success: function (data, textStatus, jqXHR) {
-                                controller.substitute(data.res);
+                                caller.substitute(data.res);
                                 view.update(data);
                             }
                         });
@@ -86,26 +89,51 @@
             calculator.controller.CalculatorController = (function () {
                 function CalculatorController() {
                     var model = {};
+                    var parsingService = {};
+
+                    this.setModel = function (m) {
+                        model = m;
+                    };
+                    this.getModel = function () {
+                        return model;
+                    };
+                    this.setParsingService = function (s) {
+                        parsingService = s;
+                    };
+                    this.reset = function () {
+                        model.reset();
+                        parsingService.reset();
+                    };
+                    this.updateModel = function (input) {
+                        parsingService.setInput(input);
+                        parsingService.parseInput();
+                    };
+                }
+                return CalculatorController;
+            })();
+            calculator.service = {};
+            calculator.service.ParsingService = (function () {
+                function ParsingService() {
                     var input = {};
                     var indexBefore1 = {};
                     var indexBefore2 = {};
                     var indexAfter1 = {};
                     var indexAfter2 = {};
+                    var controller = {};
 
-                    this.setModel = function (m) {
-                        model = m;
+                    this.setInput = function (input) {
+                        this.input = input;
                     };
+                    this.setController = function (c) {
+                        controller = c;
+                    };
+
                     this.reset = function () {
                         this.input = {};
                         this.indexBefore1 = {};
                         this.indexAfter1 = {};
                         this.indexBefore2 = {};
                         this.indexAfter2 = {};
-                        model.reset();
-                    };
-                    this.updateModel = function (input) {
-                        this.input = input;
-                        this.parseInput();
                     };
                     this.parseInput = function () {
                         if (this.input.includes('+')) {
@@ -145,7 +173,7 @@
                         this.indexBefore2 = this.indexOfNumber(this.input, firstIndexOfOperator, true, false);
                         this.indexAfter1 = this.indexOfNumber(this.input, firstIndexOfOperator, false, true);
                         this.indexAfter2 = this.indexOfNumber(this.input, firstIndexOfOperator, false, false);
-                        model.getOperation(this.input.substring(this.indexBefore1, this.indexBefore2), this.input.substring(this.indexAfter1, this.indexAfter2), this.input[firstIndexOfOperator], this);
+                        controller.getModel().getOperation(this.input.substring(this.indexBefore1, this.indexBefore2), this.input.substring(this.indexAfter1, this.indexAfter2), this.input[firstIndexOfOperator], this);
                     };
                     this.substitute = function (result) {
                         if (result < 0)
@@ -176,7 +204,7 @@
                                 retValue--;
                                 if (input[retValue] === '-' && input[retValue - 1] === '(') {
                                     return retValue - 1;
-                                }                                
+                                }
                             }
                             else {
                                 retValue++;
@@ -190,7 +218,7 @@
                         return retValue;
                     };
                 }
-                return CalculatorController;
+                return ParsingService;
             })();
             /* ]]> */
         </script>

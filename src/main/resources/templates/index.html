@@ -14,8 +14,8 @@
         <ul style="list-style-type:none" id="li-results"></ul>
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-        <script src="calculator.js"></script>
         <script type="text/javascript">
+            /* <![CDATA[ */
             $(document).ready(function () {
                 var model = new calculator.domain.Operations();
                 var view = new calculator.view.Calculator();
@@ -32,9 +32,11 @@
                 function Operations() {
                     var view = {};
                     this.getOperation = function (arg1, arg2, op, controller) {
-                        return $.ajax({
+                        var arg1NoParentheses = arg1.replace('(', '').replace(')', '');
+                        var arg2NoParentheses = arg2.replace('(', '').replace(')', '');
+                        $.ajax({
                             url: "http://localhost:8080/calculate",
-                            data: {"arg1": arg1, "arg2": arg2, "op": op},
+                            data: {"arg1": arg1NoParentheses, "arg2": arg2NoParentheses, "op": op},
                             dataType: 'json',
                             success: function (data, textStatus, jqXHR) {
                                 controller.substitute(data.res);
@@ -107,25 +109,38 @@
                     };
                     this.parseInput = function () {
                         if (this.input.includes('+')) {
-                            this.parseOperator('+');
+                            this.parseOperator(this.input.indexOf('+'));
                             return;
                         }
-                        if (this.input.includes('-')) {
-                            this.parseOperator('-');
+                        if (this.indexOfFirstMinusOperator(this.input) !== -1) {
+                            this.parseOperator(this.indexOfFirstMinusOperator(this.input));
                             return;
                         }
                         if (this.input.includes('*')) {
-                            this.parseOperator('*');
+                            this.parseOperator(this.input.indexOf('*'));
                             return;
                         }
                         if (this.input.includes('/')) {
-                            this.parseOperator('/');
+                            this.parseOperator(this.input.indexOf('/'));
                             return;
                         }
+                    };
+                    this.indexOfFirstMinusOperator = function (input) {
+                        if (!input.includes('-'))
+                            return -1;
+                        if (!input.includes('('))
+                            return input.indexOf('-');
+                        while (input.includes('(-')) {
+                            input = input.replace('(-', '  ');
+                        }
+                        if (input.includes('-')) {
+                            return input.indexOf('-');
+                        }
+                        return -1;
                     }
-                    ;
-                    this.parseOperator = function (operator) {
-                        var firstIndexOfOperator = this.input.indexOf(operator);
+                    this.parseOperator = function (firstIndexOfOperator) {
+                        if ($.isNumeric(this.input))
+                            return;
                         this.indexBefore1 = this.indexOfNumber(this.input, firstIndexOfOperator, true, true);
                         this.indexBefore2 = this.indexOfNumber(this.input, firstIndexOfOperator, true, false);
                         this.indexAfter1 = this.indexOfNumber(this.input, firstIndexOfOperator, false, true);
@@ -133,33 +148,51 @@
                         model.getOperation(this.input.substring(this.indexBefore1, this.indexBefore2), this.input.substring(this.indexAfter1, this.indexAfter2), this.input[firstIndexOfOperator], this);
                     };
                     this.substitute = function (result) {
+                        if (result < 0)
+                            result = '(' + result + ')';
                         this.input = this.input.substring(0, this.indexBefore1) + result + this.input.substring(this.indexAfter2, this.input.length);
                         this.parseInput();
                     };
                     this.indexOfNumber = function (input, index, before, beginning) {
                         var retValue = index;
                         while (!$.isNumeric(input[retValue])) {
-                            if (before)
+                            if (before) {
                                 retValue--;
-                            else
+                                if (input[retValue] === ')' && !beginning)
+                                    return retValue + 1;
+                            }
+                            else {
                                 retValue++;
+                                if (input[retValue] === '(' && beginning)
+                                    return retValue;
+                            }
                         }
-                        if ((before &amp;&amp; !beginning) || (!before &amp;&amp; beginning))
+                        if (!before && beginning)
                             return retValue;
+                        if (before && !beginning)
+                            return retValue + 1;
                         while ($.isNumeric(input[retValue]) || input[retValue] === '.') {
-                            if (beginning)
+                            if (beginning) {
                                 retValue--;
-                            else
+                                if (input[retValue] === '-' && input[retValue - 1] === '(') {
+                                    return retValue - 1;
+                                }                                
+                            }
+                            else {
                                 retValue++;
+                                if (input[retValue] === ')') {
+                                    return retValue + 1;
+                                }
+                            }
                         }
                         if (beginning)
                             return retValue + 1;
-                        else
-                            return retValue;
+                        return retValue;
                     };
                 }
                 return CalculatorController;
             })();
+            /* ]]> */
         </script>
     </body>
 </html>

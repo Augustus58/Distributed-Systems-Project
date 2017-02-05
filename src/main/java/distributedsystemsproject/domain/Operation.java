@@ -10,6 +10,7 @@ public class Operation extends AbstractPersistable<Long> {
   private Double arg2;
   private String op;
   private Double res;
+  private String error;
 
   public Operation() {
   }
@@ -37,6 +38,10 @@ public class Operation extends AbstractPersistable<Long> {
     this.res = res;
   }
 
+  public void setError(String error) {
+    this.error = error;
+  }
+
   public Double getArg1() {
     return arg1;
   }
@@ -51,6 +56,10 @@ public class Operation extends AbstractPersistable<Long> {
 
   public Double getRes() {
     return res;
+  }
+  
+  public String getError() {
+    return error;
   }
 
 }

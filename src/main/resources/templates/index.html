@@ -6,22 +6,160 @@
 
     <body>
         <h1>Calculator</h1>
-        <ol>
-            <li th:each="operation : ${operations}">
-                <span th:text="${operation.arg1}"></span><span th:text="${operation.op}"></span><span th:text="${operation.arg2}"></span>=<span th:text="${operation.res}"></span>
-            </li>
-        </ol>
-        <p th:text="${feedback}"></p>
-        <form th:action="@{/calculate}" method="GET">
-            <input type="text" name="arg1"/>
-            <select name="op">
-                <option value="+">+</option>
-                <option value="-">-</option>
-                <option value="*">*</option>
-                <option value="/">/</option>
-            </select>
-            <input type="text" name="arg2"/>
-            <input type="submit"/>
+        <form>
+            <input type="text" name="input" id="tb-input"/>
+            <input type="button" value="Calculate" id="btn-submit"/>
+            <input type="button" value="Reset" id="btn-reset"/>
         </form>
+        <ul style="list-style-type:none" id="li-results"></ul>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+        <script src="calculator.js"></script>
+        <script type="text/javascript">
+            $(document).ready(function () {
+                var model = new calculator.domain.Operations();
+                var view = new calculator.view.Calculator();
+                var controller = new calculator.controller.CalculatorController();
+                view.setController(controller);
+                model.setView(view);
+                controller.setModel(model);
+                view.setSubmitListener();
+                view.setResetListener();
+            });
+            var calculator = {};
+            calculator.domain = {};
+            calculator.domain.Operations = (function () {
+                function Operations() {
+                    var view = {};
+                    this.getOperation = function (arg1, arg2, op, controller) {
+                        return $.ajax({
+                            url: "http://localhost:8080/calculate",
+                            data: {"arg1": arg1, "arg2": arg2, "op": op},
+                            dataType: 'json',
+                            success: function (data, textStatus, jqXHR) {
+                                controller.substitute(data.res);
+                                view.update(data);
+                            }
+                        });
+                    };
+                    this.setView = function (v) {
+                        view = v;
+                    };
+                    this.reset = function () {
+                        view.reset();
+                    };
+                }
+                return Operations;
+            })();
+            calculator.view = {};
+            calculator.view.Calculator = (function () {
+                function Calculator() {
+                    var controller = {};
+                    this.update = function (operation) {
+                        var textNode = document.createTextNode(operation.arg1 + " " + operation.op + " " + operation.arg2 + " = " + operation.res);
+                        var liElement = document.createElement("li");
+                        liElement.appendChild(textNode);
+                        $(liElement).appendTo($("#li-results"));
+                    };
+                    this.setSubmitListener = function () {
+                        $("#btn-submit").click(function () {
+                            controller.updateModel($("#tb-input").val());
+                        });
+                    };
+                    this.setResetListener = function () {
+                        $("#btn-reset").click(function () {
+                            controller.reset();
+                        });
+                    };
+                    this.reset = function () {
+                        $("#li-results").empty();
+                    };
+                    this.setController = function (c) {
+                        controller = c;
+                    };
+                }
+                return Calculator;
+            })();
+            calculator.controller = {};
+            calculator.controller.CalculatorController = (function () {
+                function CalculatorController() {
+                    var model = {};
+                    var input = {};
+                    var indexBefore1 = {};
+                    var indexBefore2 = {};
+                    var indexAfter1 = {};
+                    var indexAfter2 = {};
+
+                    this.setModel = function (m) {
+                        model = m;
+                    };
+                    this.reset = function () {
+                        this.input = {};
+                        this.indexBefore1 = {};
+                        this.indexAfter1 = {};
+                        this.indexBefore2 = {};
+                        this.indexAfter2 = {};
+                        model.reset();
+                    };
+                    this.updateModel = function (input) {
+                        this.input = input;
+                        this.parseInput();
+                    };
+                    this.parseInput = function () {
+                        if (this.input.includes('+')) {
+                            this.parseOperator('+');
+                            return;
+                        }
+                        if (this.input.includes('-')) {
+                            this.parseOperator('-');
+                            return;
+                        }
+                        if (this.input.includes('*')) {
+                            this.parseOperator('*');
+                            return;
+                        }
+                        if (this.input.includes('/')) {
+                            this.parseOperator('/');
+                            return;
+                        }
+                    }
+                    ;
+                    this.parseOperator = function (operator) {
+                        var firstIndexOfOperator = this.input.indexOf(operator);
+                        this.indexBefore1 = this.indexOfNumber(this.input, firstIndexOfOperator, true, true);
+                        this.indexBefore2 = this.indexOfNumber(this.input, firstIndexOfOperator, true, false);
+                        this.indexAfter1 = this.indexOfNumber(this.input, firstIndexOfOperator, false, true);
+                        this.indexAfter2 = this.indexOfNumber(this.input, firstIndexOfOperator, false, false);
+                        model.getOperation(this.input.substring(this.indexBefore1, this.indexBefore2), this.input.substring(this.indexAfter1, this.indexAfter2), this.input[firstIndexOfOperator], this);
+                    };
+                    this.substitute = function (result) {
+                        this.input = this.input.substring(0, this.indexBefore1) + result + this.input.substring(this.indexAfter2, this.input.length);
+                        this.parseInput();
+                    };
+                    this.indexOfNumber = function (input, index, before, beginning) {
+                        var retValue = index;
+                        while (!$.isNumeric(input[retValue])) {
+                            if (before)
+                                retValue--;
+                            else
+                                retValue++;
+                        }
+                        if ((before &amp;&amp; !beginning) || (!before &amp;&amp; beginning))
+                            return retValue;
+                        while ($.isNumeric(input[retValue]) || input[retValue] === '.') {
+                            if (beginning)
+                                retValue--;
+                            else
+                                retValue++;
+                        }
+                        if (beginning)
+                            return retValue + 1;
+                        else
+                            return retValue;
+                    };
+                }
+                return CalculatorController;
+            })();
+        </script>
     </body>
 </html>

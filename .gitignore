@@ -8,3 +8,4 @@
 target/
 .DS_Store
 *.netbeans_automatic_build
+nbactions.xml

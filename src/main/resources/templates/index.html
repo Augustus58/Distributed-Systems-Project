@@ -13,20 +13,33 @@
         </form>
         <ul style="list-style-type:none" id="li-results"></ul>
 
+        <h1>Your sins</h1>
+        <form>
+            <input type="text" name="input" id="tb-sins-input"/>
+            <input type="button" value="Calculate" id="btn-sins-submit"/>
+        </form>
+        <img id="img-sins"></img>
+
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
         <script type="text/javascript">
             /* <![CDATA[ */
             $(document).ready(function () {
                 var model = new calculator.domain.Operations();
+                var sinModel = new calculator.domain.Sins();
                 var view = new calculator.view.Calculator();
                 var controller = new calculator.controller.CalculatorController();
+                var sinController = new calculator.controller.SinController();
                 var parsingService = new calculator.service.ParsingService();
                 view.setController(controller);
                 model.setView(view);
+                sinModel.setView(view);
                 controller.setModel(model);
-                controller.setParsingService(parsingService);                
+                controller.setParsingService(parsingService);
+                sinController.setModel(sinModel);
                 view.setSubmitListener();
+                view.setSinSubmitListener();
                 view.setResetListener();
+                view.setSinController(sinController);
                 parsingService.setController(controller);
             });
             var calculator = {};
@@ -56,15 +69,40 @@
                 }
                 return Operations;
             })();
+            calculator.domain.Sins = (function () {
+                function Sins() {
+                    var view = {};
+                    this.getSin = function (command, caller) {
+                        $.ajax({
+                            url: "http://localhost:8080/sin",
+                            data: {"command": command},
+                            success: function (data, textStatus, jqXHR) {
+                                view.updateSin(data);
+                            }
+                        });
+                    };
+                    this.setView = function (v) {
+                        view = v;
+                    };
+                    this.reset = function () {
+                        view.reset();
+                    };
+                }
+                return Sins;
+            })();
             calculator.view = {};
             calculator.view.Calculator = (function () {
                 function Calculator() {
                     var controller = {};
+                    var sinController = {};
                     this.update = function (operation) {
                         var textNode = document.createTextNode(operation.arg1 + " " + operation.op + " " + operation.arg2 + " = " + operation.res);
                         var liElement = document.createElement("li");
                         liElement.appendChild(textNode);
                         $(liElement).appendTo($("#li-results"));
+                    };
+                    this.updateSin = function (data) {
+                        $("#img-sins").attr("src", "data:image/png;base64," + data);
                     };
                     this.setSubmitListener = function () {
                         $("#btn-submit").click(function () {
@@ -76,11 +114,19 @@
                             controller.reset();
                         });
                     };
+                    this.setSinSubmitListener = function () {
+                        $("#btn-sins-submit").click(function () {
+                            sinController.updateModel($("#tb-sins-input").val());
+                        });
+                    };
                     this.reset = function () {
                         $("#li-results").empty();
                     };
                     this.setController = function (c) {
                         controller = c;
+                    };
+                    this.setSinController = function (c) {
+                        sinController = c;
                     };
                 }
                 return Calculator;
@@ -110,6 +156,25 @@
                     };
                 }
                 return CalculatorController;
+            })();
+            calculator.controller.SinController = (function () {
+                function SinController() {
+                    var model = {};
+
+                    this.setModel = function (m) {
+                        model = m;
+                    };
+                    this.getModel = function () {
+                        return model;
+                    };
+                    this.reset = function () {
+                        model.reset();
+                    };
+                    this.updateModel = function (command) {
+                        model.getSin(command, this);
+                    };
+                }
+                return SinController;
             })();
             calculator.service = {};
             calculator.service.ParsingService = (function () {
@@ -165,7 +230,7 @@
                             return input.indexOf('-');
                         }
                         return -1;
-                    }
+                    };
                     this.parseOperator = function (firstIndexOfOperator) {
                         if ($.isNumeric(this.input))
                             return;

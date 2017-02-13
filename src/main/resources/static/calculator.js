@@ -6,9 +6,12 @@ $(document).ready(function () {
     var sinController = new calculator.controller.SinController();
     var parsingService = new calculator.service.ParsingService();
     var plottingService = new calculator.service.PlottingService();
+    var cachingService = new calculator.service.CachingService();
     view.setController(controller);
     model.setView(view);
+    model.setCachingService(cachingService);
     sinModel.setView(view);
+    sinModel.setCachingService(cachingService);
     controller.setModel(model);
     controller.setParsingService(parsingService);
     sinController.setModel(sinModel);
@@ -16,34 +19,49 @@ $(document).ready(function () {
     sinController.setView(view);
     view.setSubmitListener();
     view.setSinSubmitListener();
+    view.setCachingSubmitListener();
     view.setResetListener();
     view.setSinController(sinController);
     view.setCanvasParameters(3.14, 400, 300);
     view.setCanvas();
     view.setCanvasCtx();
+    view.setCachingService(cachingService);
     parsingService.setController(controller);
     plottingService.setController(sinController);
+    cachingService.initialize();
 });
 var calculator = {};
 calculator.domain = {};
 calculator.domain.Operations = (function () {
     function Operations() {
         var view = {};
+        var cachingService = {};
         this.getOperation = function (arg1, arg2, op, caller) {
             var arg1NoParentheses = arg1.replace('(', '').replace(')', '');
             var arg2NoParentheses = arg2.replace('(', '').replace(')', '');
-            $.ajax({
-                url: "http://localhost:8080/calculate",
-                data: {"arg1": arg1NoParentheses, "arg2": arg2NoParentheses, "op": op},
-                dataType: 'json',
-                success: function (data, textStatus, jqXHR) {
-                    caller.substitute(data.res);
-                    view.update(data);
-                }
-            });
+            var val = cachingService.lookUp(arg1NoParentheses + op + arg2NoParentheses);
+            if (val === undefined) {
+                $.ajax({
+                    url: "http://localhost:8080/calculate",
+                    data: {"arg1": arg1NoParentheses, "arg2": arg2NoParentheses, "op": op},
+                    dataType: 'json',
+                    success: function (data, textStatus, jqXHR) {
+                        cachingService.add([arg1NoParentheses + op + arg2NoParentheses, data]);
+                        caller.substitute(data.res);
+                        view.update(data);
+                    }
+                });
+            } else {
+                view.update(val);
+                caller.substitute(val.res);
+            }
+
         };
         this.setView = function (v) {
             view = v;
+        };
+        this.setCachingService = function (s) {
+            cachingService = s;
         };
         this.reset = function () {
             view.reset();
@@ -54,6 +72,7 @@ calculator.domain.Operations = (function () {
 calculator.domain.Sins = (function () {
     function Sins() {
         var view = {};
+        var cachingService = {};
         this.getSin = function (command, caller) {
             $.ajax({
                 url: "http://localhost:8080/sin",
@@ -64,17 +83,26 @@ calculator.domain.Sins = (function () {
             });
         };
         this.getValueForSinFunction = function (input, i, x, caller) {
-            $.ajax({
-                url: "http://localhost:8080/sin",
-                data: {"command": input},
-                dataType: 'json',
-                success: function (data, textStatus, jqXHR) {
-                    caller.addValue(i, x, data.res);
-                }
-            });
+            var val = cachingService.lookUp(input);
+            if (val === undefined) {
+                $.ajax({
+                    url: "http://localhost:8080/sin",
+                    data: {"command": input},
+                    dataType: 'json',
+                    success: function (data, textStatus, jqXHR) {
+                        cachingService.add([input, data.res]);
+                        caller.addValue(i, x, data.res);
+                    }
+                });
+            } else {
+                caller.addValue(i, x, val);
+            }
         };
         this.setView = function (v) {
             view = v;
+        };
+        this.setCachingService = function (s) {
+            cachingService = s;
         };
         this.reset = function () {
             view.reset();
@@ -87,6 +115,7 @@ calculator.view.Calculator = (function () {
     function Calculator() {
         var controller = {};
         var sinController = {};
+        var cachingService = {};
         var canvas = {};
         var canvasCtx = {};
         var maxXvalue = {};
@@ -119,6 +148,11 @@ calculator.view.Calculator = (function () {
                 sinController.updateModel($("#tb-sins-input").val());
             });
         };
+        this.setCachingSubmitListener = function () {
+            $("#btn-caching-submit").click(function () {
+                cachingService.setMax($("#tb-caching-input").val());
+            });
+        };
         this.reset = function () {
             $("#li-results").empty();
         };
@@ -127,6 +161,9 @@ calculator.view.Calculator = (function () {
         };
         this.setSinController = function (c) {
             sinController = c;
+        };
+        this.setCachingService = function (s) {
+            cachingService = s;
         };
         this.setCanvas = function () {
             canvas = document.getElementById('cv-plot');
@@ -412,4 +449,38 @@ calculator.service.PlottingService = (function () {
         };
     }
     return PlottingService;
+})();
+calculator.service.CachingService = (function () {
+    function CachingService() {
+        var array = {};
+        var map = {};
+        var maxSize = {};
+
+        this.initialize = function () {
+            this.array = [];
+            this.map = new Map();
+            this.maxSize = 1000;
+        };
+        this.lookUp = function (key) {
+            var toBeReturned = this.map.get(key);
+            this.resize();
+            return toBeReturned;
+        };
+        this.add = function (cacheItem) {
+            this.array.push(cacheItem[0]);
+            this.map.set(cacheItem[0], cacheItem[1]);
+            this.resize();
+        };
+        this.resize = function () {
+            while (this.array.length > this.maxSize) {
+                var toBeRemoved = this.array.shift();
+                this.map.delete(toBeRemoved);
+            }
+        };
+        this.setMax = function (input) {
+            this.maxSize = parseInt(input);
+            this.resize();
+        };
+    }
+    return CachingService;
 })();

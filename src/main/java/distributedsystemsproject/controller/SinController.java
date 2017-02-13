@@ -1,36 +1,46 @@
 package distributedsystemsproject.controller;
 
 import distributedsystemsproject.service.SinService;
-import java.util.Base64;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 
-@Controller
+@RestController
 @RequestMapping("/sin")
 public class SinController {
 
   @RequestMapping(method = RequestMethod.GET)
-  public ResponseEntity<byte[]> Image(@RequestParam String command) {
-    byte[] plot = null;
-    ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+  @ResponseBody
+  public SinCalculationResult CalculateSin(@RequestParam String command) {
     try {
-      plot = SinService.getSin(command, attr.getSessionId());
+      return new SinCalculationResult(SinService.CalculateSin(command));
     } catch (Exception e) {
-      System.out.print(e.toString());
+      return new SinCalculationResult(0.0);
     }
-    if (plot != null) {
-      byte[] base64array = Base64.getEncoder().encode(plot);
-      return createResponseEntity("image/png", new Long(base64array.length), base64array);
+  }
+
+  public class SinCalculationResult {
+
+    public Double res;
+
+    public SinCalculationResult(Double res) {
+      this.res = res;
     }
-    return null;
+
+    public Double getRes() {
+      return res;
+    }
+
+    public void setRes(Double res) {
+      this.res = res;
+    }
+
   }
 
   private ResponseEntity<byte[]> createResponseEntity(String contentType, Long contentLength, byte[] content) {

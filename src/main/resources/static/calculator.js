@@ -63,6 +63,16 @@ calculator.domain.Sins = (function () {
                 }
             });
         };
+        this.getValueForSinFunction = function (input, i, x, caller) {
+            $.ajax({
+                url: "http://localhost:8080/sin",
+                data: {"command": input},
+                dataType: 'json',
+                success: function (data, textStatus, jqXHR) {
+                    caller.addValue(i, x, data.res);
+                }
+            });
+        };
         this.setView = function (v) {
             view = v;
         };
@@ -106,7 +116,7 @@ calculator.view.Calculator = (function () {
         };
         this.setSinSubmitListener = function () {
             $("#btn-sins-submit").click(function () {
-                sinController.plot($("#tb-sins-input").val());
+                sinController.updateModel($("#tb-sins-input").val());
             });
         };
         this.reset = function () {
@@ -225,8 +235,8 @@ calculator.controller.SinController = (function () {
         this.reset = function () {
             model.reset();
         };
-        this.updateModel = function (command) {
-            model.getSin(command, this);
+        this.updateModel = function (input) {
+            plottingService.plot(input);
         };
         this.plot = function (input) {
             plottingService.plot(input);
@@ -347,24 +357,58 @@ calculator.service.PlottingService = (function () {
     function PlottingService() {
         var controller = {};
 
+        var data = {};
+        var max = {};
+
         this.setController = function (c) {
             controller = c;
         };
         this.getController = function () {
             return controller;
         };
+        this.getData = function () {
+            return this.data;
+        };
+        this.getMax = function () {
+            return this.max;
+        };
         this.plot = function (input) {
-            var data = [];
-            var max = 0;
-            var y = 0;
+            this.data = [];
+            this.max = 0;
+            var i = 0;
             for (var x = -3.14; x <= 3.14; x = x + 0.01) {
-                y = eval(input.replace('sin', 'Math.sin').replace('x', x));
-                data.push([x, y]);
-                if (Math.abs(y) > max) {
-                    max = Math.abs(y);
-                }
+                controller.getModel().getValueForSinFunction(input.replace('x', x), i, x, this);
+                i++;
             }
-            controller.getView().plot(data, max);
+            this.waitForValues(this);
+        };
+        this.waitForValues = function () {
+            var thisController = this;
+            setTimeout(function () {
+                thisController.testFunction(thisController);
+            }, 400);
+        };
+        this.testFunction = function (service) {
+            function allValuesReceived() {
+                for (var j = 628; j >= 0; j--) {
+                    if (!$.isArray(service.getData()[j])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (allValuesReceived()) {
+                service.getController().getView().plot(service.getData(), service.getMax());
+            }
+            else {
+                service.waitForValues();
+            }
+        };
+        this.addValue = function (i, argument, value) {
+            if (Math.abs(value) > this.max) {
+                this.max = Math.abs(value);
+            }
+            this.data[i] = [argument, value];
         };
     }
     return PlottingService;

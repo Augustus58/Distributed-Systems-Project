@@ -9,21 +9,31 @@
         <form>
             <input type="text" name="input" id="tb-input"/>
             <input type="button" value="Calculate" id="btn-submit"/>
+            <input type="button" value="Simplify" id="btn-simplify"/>
             <input type="button" value="Reset" id="btn-reset"/>
         </form>
+        
+        <h2>Original input</h2>
+        <p>Updated only when Calculate pressed.</p>
+        <p id="p-original-input"></p>
+        
+        <h2>Intermediate results</h2>
         <ul style="list-style-type:none" id="li-results"></ul>
 
-        <h1>Your sins</h1>
+        <h1>Sines</h1>
         <form>
             <input type="text" name="input" id="tb-sins-input"/>
-            <input type="button" value="Calculate" id="btn-sins-submit"/>
+            <input type="button" value="Plot" id="btn-sins-submit"/>
         </form>
         <canvas id="cv-plot"></canvas>
         
         <h1>Caching properties</h1>
+        <h2>Current cache size</h2>
+        <p id="p-current-cache"></p>
+        <h2>Set cache size</h2>
         <form>
             <input type="text" name="input" id="tb-caching-input"/>
-            <input type="button" value="Calculate" id="btn-caching-submit"/>
+            <input type="button" value="Set cache size" id="btn-caching-submit"/>
         </form>
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>

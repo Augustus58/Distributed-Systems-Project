@@ -7,6 +7,7 @@ $(document).ready(function () {
     var parsingService = new calculator.service.ParsingService();
     var plottingService = new calculator.service.PlottingService();
     var cachingService = new calculator.service.CachingService();
+    var simplifyingService = new calculator.service.SimplifyingService();
     view.setController(controller);
     model.setView(view);
     model.setCachingService(cachingService);
@@ -14,12 +15,15 @@ $(document).ready(function () {
     sinModel.setCachingService(cachingService);
     controller.setModel(model);
     controller.setParsingService(parsingService);
+    controller.setSimplifyingService(simplifyingService);
+    controller.setView(view);
     sinController.setModel(sinModel);
     sinController.setPlottingService(plottingService);
     sinController.setView(view);
     view.setSubmitListener();
     view.setSinSubmitListener();
     view.setCachingSubmitListener();
+    view.setSimplifyListener();
     view.setResetListener();
     view.setSinController(sinController);
     view.setCanvasParameters(3.14, 400, 300);
@@ -27,8 +31,13 @@ $(document).ready(function () {
     view.setCanvasCtx();
     view.setCachingService(cachingService);
     parsingService.setController(controller);
+    parsingService.setSimplifyingService(simplifyingService);
     plottingService.setController(sinController);
-    cachingService.initialize();
+    cachingService.initialize(1000);
+    view.updateCurrentCacheSize(1000);
+    simplifyingService.setParsingService(parsingService);
+    simplifyingService.setCachingService(cachingService);
+    simplifyingService.setController(controller);
 });
 var calculator = {};
 calculator.domain = {};
@@ -133,25 +142,42 @@ calculator.view.Calculator = (function () {
         this.updateSin = function (data) {
             $("#img-sins").attr("src", "data:image/png;base64," + data);
         };
+        this.updateInput = function (data) {
+            $("#tb-input").val(data);
+        };
+        this.updateOriginalInput = function (data) {
+            $("#p-original-input").text(data);
+        };
+        this.updateCurrentCacheSize = function (data) {
+            $("#p-current-cache").text(data);
+        };
         this.setSubmitListener = function () {
             $("#btn-submit").click(function () {
+                this.updateOriginalInput($("#tb-input").val());
                 controller.updateModel($("#tb-input").val());
-            });
+            }.bind(this));
         };
         this.setResetListener = function () {
             $("#btn-reset").click(function () {
+                this.updateOriginalInput('');
                 controller.reset();
-            });
+            }.bind(this));
         };
         this.setSinSubmitListener = function () {
             $("#btn-sins-submit").click(function () {
                 sinController.updateModel($("#tb-sins-input").val());
             });
         };
+        this.setSimplifyListener = function () {
+            $("#btn-simplify").click(function () {
+                controller.simplify($("#tb-input").val());
+            });
+        };
         this.setCachingSubmitListener = function () {
             $("#btn-caching-submit").click(function () {
+                this.updateCurrentCacheSize($("#tb-caching-input").val());
                 cachingService.setMax($("#tb-caching-input").val());
-            });
+            }.bind(this));
         };
         this.reset = function () {
             $("#li-results").empty();
@@ -226,7 +252,9 @@ calculator.controller = {};
 calculator.controller.CalculatorController = (function () {
     function CalculatorController() {
         var model = {};
+        var view = {};
         var parsingService = {};
+        var simplifyingService = {};
 
         this.setModel = function (m) {
             model = m;
@@ -234,12 +262,24 @@ calculator.controller.CalculatorController = (function () {
         this.getModel = function () {
             return model;
         };
+        this.setView = function (v) {
+            view = v;
+        };
+        this.getView = function () {
+            return view;
+        };
         this.setParsingService = function (s) {
             parsingService = s;
+        };
+        this.setSimplifyingService = function (s) {
+            simplifyingService = s;
         };
         this.reset = function () {
             model.reset();
             parsingService.reset();
+        };
+        this.simplify = function (input) {
+            view.updateInput(simplifyingService.simplify(input));
         };
         this.updateModel = function (input) {
             parsingService.setInput(input);
@@ -290,12 +330,16 @@ calculator.service.ParsingService = (function () {
         var indexAfter1 = {};
         var indexAfter2 = {};
         var controller = {};
+        var simplifyingService = {};
 
         this.setInput = function (input) {
             this.input = input;
         };
         this.setController = function (c) {
             controller = c;
+        };
+        this.setSimplifyingService = function (s) {
+            simplifyingService = s;
         };
 
         this.reset = function () {
@@ -306,12 +350,14 @@ calculator.service.ParsingService = (function () {
             this.indexAfter2 = {};
         };
         this.parseInput = function () {
+            this.input = simplifyingService.simplifyRepeatedly(this.input);
+            controller.getView().updateInput(this.input);
             if (this.input.includes('+')) {
                 this.parseOperator(this.input.indexOf('+'));
                 return;
             }
-            if (this.indexOfFirstMinusOperator(this.input) !== -1) {
-                this.parseOperator(this.indexOfFirstMinusOperator(this.input));
+            if (this.indexOfFirstMinusOperator(this.input, 0) !== -1) {
+                this.parseOperator(this.indexOfFirstMinusOperator(this.input, 0));
                 return;
             }
             if (this.input.includes('*')) {
@@ -323,16 +369,54 @@ calculator.service.ParsingService = (function () {
                 return;
             }
         };
-        this.indexOfFirstMinusOperator = function (input) {
+        this.parseInputForSimplifying = function (input, triedOperator, lastTriedIndice) {
+            if (triedOperator === null) {
+                if (input.includes('+')) {
+                    return input.indexOf('+');
+                }
+                if (this.indexOfFirstMinusOperator(input, 0) !== -1) {
+                    return this.indexOfFirstMinusOperator(input, 0);
+                }
+                if (input.includes('*')) {
+                    return input.indexOf('*');
+                }
+                if (input.includes('/')) {
+                    return input.indexOf('/');
+                }
+            } else {
+                if (triedOperator === '+') {
+                    if (input.includes('+', lastTriedIndice + 1)) {
+                        return input.indexOf('+', lastTriedIndice + 1);
+                    }
+                }
+                if (triedOperator === '-') {
+                    if (this.indexOfFirstMinusOperator(input, lastTriedIndice + 1) !== -1) {
+                        return this.indexOfFirstMinusOperator(input, lastTriedIndice + 1);
+                    }
+                }
+                if (triedOperator === '*') {
+                    if (input.includes('*', lastTriedIndice + 1)) {
+                        return input.indexOf('*', lastTriedIndice + 1);
+                    }
+                }
+                if (triedOperator === '/') {
+                    if (input.includes('/', lastTriedIndice + 1)) {
+                        return input.indexOf('/', lastTriedIndice + 1);
+                    }
+                }
+            }
+            return -1;
+        };
+        this.indexOfFirstMinusOperator = function (input, start) {
             if (!input.includes('-'))
                 return -1;
             if (!input.includes('('))
-                return input.indexOf('-');
+                return input.indexOf('-', start);
             while (input.includes('(-')) {
                 input = input.replace('(-', '  ');
             }
             if (input.includes('-')) {
-                return input.indexOf('-');
+                return input.indexOf('-', start);
             }
             return -1;
         };
@@ -345,11 +429,41 @@ calculator.service.ParsingService = (function () {
             this.indexAfter2 = this.indexOfNumber(this.input, firstIndexOfOperator, false, false);
             controller.getModel().getOperation(this.input.substring(this.indexBefore1, this.indexBefore2), this.input.substring(this.indexAfter1, this.indexAfter2), this.input[firstIndexOfOperator], this);
         };
+        this.parseOperatorForSimplifying = function (input, firstIndexOfOperator) {
+            var indexBefore1 = this.indexOfNumber(input, firstIndexOfOperator, true, true);
+            var indexBefore2 = this.indexOfNumber(input, firstIndexOfOperator, true, false);
+            var indexAfter1 = this.indexOfNumber(input, firstIndexOfOperator, false, true);
+            var indexAfter2 = this.indexOfNumber(input, firstIndexOfOperator, false, false);
+            var operation = [input.substring(indexBefore1, indexBefore2), input.substring(indexAfter1, indexAfter2), input[firstIndexOfOperator], indexBefore1, indexAfter2];
+            return operation;
+        };
         this.substitute = function (result) {
+            var plus = '';
+            if (indexBefore1 - 1 > 0
+                    && input[indexBefore1 - 1] !== '-'
+                    && input[indexBefore1 - 1] !== '+'
+                    && input[indexBefore1 - 1] !== '*'
+                    && input[indexBefore1 - 1] !== '/') {
+                plus = '+';
+            }
             if (result < 0)
                 result = '(' + result + ')';
-            this.input = this.input.substring(0, this.indexBefore1) + result + this.input.substring(this.indexAfter2, this.input.length);
+            this.input = this.input.substring(0, this.indexBefore1) + plus + result + this.input.substring(this.indexAfter2, this.input.length);
             this.parseInput();
+        };
+        this.substituteForSimplifying = function (input, result, indexBefore1, indexAfter2) {
+            var plus = '';
+            if (indexBefore1 - 1 > 0
+                    && input[indexBefore1 - 1] !== '-'
+                    && input[indexBefore1 - 1] !== '+'
+                    && input[indexBefore1 - 1] !== '*'
+                    && input[indexBefore1 - 1] !== '/') {
+                plus = '+';
+            }
+            if (result < 0) {
+                result = '(' + result + ')';
+            }
+            return input.substring(0, indexBefore1) + plus + result + input.substring(indexAfter2, input.length);
         };
         this.indexOfNumber = function (input, index, before, beginning) {
             var retValue = index;
@@ -382,6 +496,9 @@ calculator.service.ParsingService = (function () {
                         return retValue + 1;
                     }
                 }
+            }
+            if (before && beginning && input[retValue] === '-') {
+                return retValue;
             }
             if (beginning)
                 return retValue + 1;
@@ -456,10 +573,10 @@ calculator.service.CachingService = (function () {
         var map = {};
         var maxSize = {};
 
-        this.initialize = function () {
+        this.initialize = function (maxSize) {
             this.array = [];
             this.map = new Map();
-            this.maxSize = 1000;
+            this.maxSize = maxSize;
         };
         this.lookUp = function (key) {
             var toBeReturned = this.map.get(key);
@@ -483,4 +600,55 @@ calculator.service.CachingService = (function () {
         };
     }
     return CachingService;
+})();
+calculator.service.SimplifyingService = (function () {
+    function SimplifyingService() {
+        var parsingService = {};
+        var cachingService = {};
+        var controller = {};
+
+        this.setParsingService = function (s) {
+            parsingService = s;
+        };
+        this.setCachingService = function (s) {
+            cachingService = s;
+        };
+        this.setController = function (c) {
+            controller = c;
+        };
+        this.simplify = function (input) {
+            var triedOperator = null;
+            var lastTriedIndice = null;
+            while (true) {
+                var index = parsingService.parseInputForSimplifying(input, triedOperator, lastTriedIndice);
+                if (index !== -1) {
+                    lastTriedIndice = index;
+                    triedOperator = input[index];
+                    var operationAndIndices = parsingService.parseOperatorForSimplifying(input, index);
+                    var arg1NoParentheses = operationAndIndices[0].replace('(', '').replace(')', '');
+                    var arg2NoParentheses = operationAndIndices[1].replace('(', '').replace(')', '');
+                    var val = cachingService.lookUp(arg1NoParentheses + operationAndIndices[2] + arg2NoParentheses);
+                    if (val !== undefined) {
+                        controller.getView().update(val);
+                        return parsingService.substituteForSimplifying(input, val.res, operationAndIndices[3], operationAndIndices[4]);
+                    } else {
+                        continue;
+                    }
+                } else {
+                    return input;
+                }
+            }
+        };
+        this.simplifyRepeatedly = function (input) {
+            var inputVersion1 = input;
+            var inputVersion2 = input;
+            inputVersion2 = this.simplify(input);
+            while (inputVersion1 !== inputVersion2) {
+                inputVersion1 = inputVersion2;
+                inputVersion2 = this.simplify(inputVersion1);
+            }
+            return inputVersion2;
+        };
+    }
+    return SimplifyingService;
 })();
